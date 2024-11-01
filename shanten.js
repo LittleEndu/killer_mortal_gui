@@ -83,7 +83,7 @@ function calculateStandardShanten(handToCheck, minimumShanten_ = -2) {
     partialSets = 0;
     bestShanten = 8;
 
-    if (minimumShanten_ == -2) {
+    if (minimumShanten_ === -2) {
         hasGivenMinimum = false;
         minimumShanten = -1;
     }

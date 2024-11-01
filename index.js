@@ -1,17 +1,44 @@
-"use strict";
+// noinspection EqualityComparisonWithCoercionJS
 
-import { calculateMinimumShanten, calculateStandardShanten } from "./shanten.js";
-import { calculateUkeire } from "./efficiency.js"
+"use strict";
+/** @typedef {object} GameEvent
+ *  @description Mortal AI output for a single game event
+ *  @property type {string} - The type of event
+ *  @property actor {number} - The player index of the actor
+ *  @property pai {number|undefined} - The tile involved in the event
+ *  @property consumed {Array<number>|undefined} - The tiles consumed in chii, pon, or kan
+ *  @property target {number|undefined} - The player index of the target
+ *  @property tsumogiri {boolean|undefined} - Whether the drawn tile was discarded
+ *
+ *  @property mortalEval {object|undefined} - The mortal AI evaluation of the event
+ *  @property mortalEval.details {Array<object>} - The mortal AI evaluation details
+ *  @property mortalEval.details.action {GameEvent} - The action evaluated
+ *  @property mortalEval.details.q_value {number} - The Q-value of the action
+ *  @property mortalEval.details.prob {number} - The probability of the action
+ *  @property mortalEval.details.normProb {number} - The normalized probability of the action
+ *  @property mortalEval.details.tiles_left {number} - The number of tiles left in the round
+ *  @property mortalEval.actual {GameEvent} - The actual action taken
+ *  @property mortalEval.actual_index {number} - The index of the actual action
+ *  @property mortalEval.is_equal {boolean} - Whether the actual action matches the Mortal AI evaluation
+ */
+
+import {calculateMinimumShanten} from "./shanten.js";
+import {calculateUkeire} from "./efficiency.js"
 
 class GlobalState {
     constructor() {
         this.ui = new UI
         this.fullData = null // Full json -- maybe split this up some, super redundant!
         this.gs = null // current round GameState
-        this.ge = null // array of array of GameEvent
+        /**
+         * @type {Array<Array<GameEvent>>}
+         * @description An array of arrays, where each inner array represents a sequence of game events for a round.
+         */
+        this.ge = null
 
         this.ply_counter = 0
         this.hand_counter = 0
+        // noinspection JSUnusedGlobalSymbols
         this.json_data = null
         this.heroPidx = null   // player index mortal reviewed
         this.showHands = false
@@ -34,6 +61,7 @@ class GlobalState {
 
         this.C_soft_T = 2
 
+        // noinspection JSUnusedGlobalSymbols
         this.mediaBreak = getComputedStyle(document.documentElement).getPropertyValue('--media-break')
         this.updateZoom()
 
@@ -47,6 +75,7 @@ class GlobalState {
         this.C_db_mortBarWidth = 10
         this.C_cb_heroBarHeight = this.C_db_height // maybe don't need separate one...
         this.C_cb_mortBarHeightRatio = 0.9
+        // noinspection JSUnusedGlobalSymbols
         this.C_cb_padding = 10
         this.C_cb_widthFactor = 1.5
         this.C_cb_maxShown = 4
@@ -54,6 +83,7 @@ class GlobalState {
         this.C_colorText = getComputedStyle(document.documentElement).getPropertyValue('--color-text')
         this.C_colorBarMortal = getComputedStyle(document.documentElement).getPropertyValue('--color-bar-mortal')
         this.C_colorBarHero = getComputedStyle(document.documentElement).getPropertyValue('--color-bar-hero')
+        // noinspection JSUnusedGlobalSymbols
         this.C_colorTsumogiri = getComputedStyle(document.documentElement).getPropertyValue('--color-tsumogiri')
         this.C_colorTileBg = getComputedStyle(document.documentElement).getPropertyValue('--color-tile-bg')
         this.C_colorOpps = [getComputedStyle(document.documentElement).getPropertyValue('--color-shimo'),
@@ -73,6 +103,7 @@ class GlobalState {
             this.C_zoom = (screen.height - 50) / 675
         }
         document.documentElement.style.setProperty('--zoom', this.C_zoom)
+        // noinspection JSUnusedGlobalSymbols
         this.C_zoomTiles =  (34*this.C_zoom - 4) / (34-4)
     }
 }
@@ -92,7 +123,8 @@ class GameState {
         this.scores = log[logIdx++]
         this.doraIndicator = log[logIdx++]
         this.dora = this.doraIndicator.map(doraIndicator2dora)
-        this.uradora = log[logIdx++]
+        // noinspection JSUnusedGlobalSymbols
+        this.uradora = log[logIdx++] // TODO: are uradora not used in point calculation??
         this.hands = []
         this.draws = []
         this.discards = []
@@ -110,7 +142,6 @@ class GameState {
         this.pao = []
         this.yakuStrings = []
         let idx = 1
-        let s = this.resultArray[idx]
         while(this.resultArray[idx]) {
             this.scoreChanges = this.scoreChanges.map((a, i) => a+this.resultArray[idx][i])
             idx++
@@ -142,10 +173,12 @@ class UI {
         this.discards = [[],[],[],[]]
         this.pInfo = [[],[],[],[]]
         this.pInfoResult = [[],[],[],[]]
+        // noinspection JSUnusedGlobalSymbols
         this.gridInfo = document.querySelector('.grid-info')
         this.round = document.querySelector('.info-round')
         this.tilesLeft = document.querySelector('.info-tiles-left')
         this.doras = document.querySelector('.info-doras')
+        // noinspection JSUnusedGlobalSymbols
         this.aboutModal = document.querySelector('.about-modal')
         this.infoRoundModal = document.querySelector('.info-round-modal')
         this.infoRoundTable = document.querySelector('.info-round-table')
@@ -200,9 +233,10 @@ class UI {
         s += num
         return s
     }
+
     parseYakuString(yaku) {
-        let s = yaku.split(/([\(\)])|([0-9]+)/)
-        s = s.map(x => { return !x ? '' : x.match(/[0-9\-\(\)]/) ? x : i18next.t(x) })
+        let s = yaku.split(/([()])|([0-9]+)/)
+        s = s.map(x => { return !x ? '' : x.match(/[0-9\-()]/) ? x : i18next.t(x) })
         return s.join(' ')
     }
     getResultTypeStr() {
@@ -268,7 +302,7 @@ class UI {
         addTableRow(actualTable, [i18next.t("Player"), this.getActionSpan(mortalEval.details[mortalEval.actual_index])])
         addTableRow(actualTable, [i18next.t("Mortal"), this.getActionSpan(mortalEval.details[0])])
     
-        for (let [idx, detail] of mortalEval.details.entries()) {
+        for (let [_, detail] of mortalEval.details.entries()) {
             let actionSpan = this.getActionSpan(detail)
             let row = [actionSpan, detail.q_value.toFixed(2), (detail.prob*100).toFixed(2)]
             addTableRow(table, row)
@@ -318,10 +352,10 @@ class UI {
             this.infoThisRoundTable.append(table)
 
             this.infoThisRoundModal.showModal()
-            this.infoThisRoundModal.addEventListener('click', (event) => {
+            this.infoThisRoundModal.addEventListener('click', (_) => {
                 this.infoThisRoundModal.close()
             })
-            this.infoThisRoundClose.addEventListener('click', (event) => {
+            this.infoThisRoundClose.addEventListener('click', (_) => {
                 this.infoThisRoundModal.close()
             })
         }
@@ -349,7 +383,7 @@ class UI {
         tileSvg.setAttribute('href', `media/Regular_shortnames/${tenhou2str(tile)}.svg`)
         tileSvg.setAttribute("x", x)
         tileSvg.setAttribute("y", y)
-        tileSvg.setAttribute("width", 18)
+        tileSvg.setAttribute("width", "18")
         return [backgroundRect, tileSvg]
     }
     updateCallBars() {
@@ -440,7 +474,7 @@ class UI {
         if (!mortalEval && !showDangerBars) {
             if (GS.showDealinRate) {
                 dangerSvgElem.appendChild(createSvgText(60,30,i18next.t("dealin-riichi-only")))
-                dangerSvgElem.lastChild.setAttribute('style', 'transform: translate(0, 50px) scale(1, -1)')
+                dangerSvgElem.lastElementChild.setAttribute('style', 'transform: translate(0, 50px) scale(1, -1)')
             }
             return // nothing to display
         }
@@ -498,7 +532,7 @@ class UI {
         }
         if (GS.showDealinRate && !atLeastOnedanger) {
             dangerSvgElem.appendChild(createSvgText(60,30,i18next.t("dealin-riichi-only")))
-            dangerSvgElem.lastChild.setAttribute('style', 'transform: translate(0, 50px) scale(1, -1)')
+            dangerSvgElem.lastElementChild.setAttribute('style', 'transform: translate(0, 50px) scale(1, -1)')
         }
     }
     updateHandInfo() {
@@ -565,11 +599,11 @@ class UI {
     }
     rotateLastTile(pidx, type) {
         let div = (type=='hand') ? this.calls[pidx] : this.discards[pidx]
-        div.lastChild.lastChild.classList.add('rotate')
+        div.lastChild.lastElementChild.classList.add('rotate')
     }
     floatLastTile(pidx) {
         let div = this.calls[pidx]
-        div.lastChild.lastChild.classList.add('float')
+        div.lastChild.lastElementChild.classList.add('float')
     }
     addBlankSpace(pidx, narrow) {
         this.addHandTiles(pidx, 'hand', ['Blank'], false)
@@ -589,14 +623,14 @@ class UI {
                 }
             }
             if (event.type=='dahai' && pidx==event.actor) {
-                this.discards[pidx].lastChild.lastChild.classList.add('last-discard')
+                this.discards[pidx].lastChild.lastElementChild.classList.add('last-discard')
             }
         }
     }
     addDiscard(pidx, tileStrArray, tsumogiri, riichi) {
         this.addDiscardTiles(pidx, tileStrArray)
         if (tsumogiri) {
-            this.discards[pidx].lastChild.lastChild.classList.add('tsumogiri')
+            this.discards[pidx].lastChild.lastElementChild.classList.add('tsumogiri')
         }
         if (riichi) {
             this.rotateLastTile(pidx, 'discard')
@@ -681,7 +715,7 @@ class UI {
             cell = tr.insertCell()
             cell.textContent = `${finalScore}`
         }
-        this.infoRoundModal.addEventListener('click', (event) => {
+        this.infoRoundModal.addEventListener('click', (_) => {
             this.infoRoundModal.close()
         })
     }
@@ -713,8 +747,7 @@ function createSvgText(x, y, text) {
     return svg
 }
 function relativeToHero(pidx) {
-    let relIdx = pidx<4 ? (4 + GS.heroPidx - pidx) % 4 : pidx
-    return relIdx
+    return pidx < 4 ? (4 + GS.heroPidx - pidx) % 4 : pidx
 }
 function relativeToHeroStr(pidx, English=0) {
     let relIdx = relativeToHero(pidx)
@@ -795,8 +828,7 @@ function tenhou2str(tileInt) {
     let suitInt = Math.floor(tileInt / 10)
     tileInt = tileInt % 10
     const tcon = ['m', 'p', 's', 'z']
-    let output = tileInt.toString() + tcon[suitInt-1]
-    return output
+    return tileInt.toString() + tcon[suitInt - 1]
 }
 
 function tenhou2strH(tileInt) {
@@ -815,8 +847,7 @@ function tenhou2strShort(tileInt) {
 }
 // take 51 (0m) and return 15.1 for sorting
 function tileInt2Float(tileInt) {
-    let f = tileInt == 51 ? 15.1 : tileInt == 52 ? 25.1 : tileInt == 53 ? 35.1 : tileInt
-    return f
+    return tileInt == 51 ? 15.1 : tileInt == 52 ? 25.1 : tileInt == 53 ? 35.1 : tileInt
 }
 
 // sort aka red fives
@@ -1166,6 +1197,7 @@ function showSujis(genbutsu) {
 // For now just return true if they called riichi
 // Maybe could also do it for people who called twice?
 // Or called dora pon?
+// noinspection JSUnusedLocalSymbols
 function tenpaiEstimate(pidx) {
     return GS.gs.thisRoundSticks[pidx]
 }
@@ -1247,8 +1279,7 @@ function doCalculateUkeire(finalHand, finalCalls, thisUnseenTiles) {
     for (let i=0; i<38; i++) {
         ukerieUnseen[i] = i%10==0 ? 0 : thisUnseenTiles[i+10]
     }
-    let ukeire = calculateUkeire(ukeireHand, ukerieUnseen, calculateMinimumShanten)
-    return ukeire
+    return calculateUkeire(ukeireHand, ukerieUnseen, calculateMinimumShanten)
 }
 function showDangers(thisPidx, tenpaiPidx, thisUnseenTiles, genbutsu, discardsToRiichi, event, dora, dangersDiv) {
     let combos = calcCombos(generateWaits(), genbutsu, discardsToRiichi, thisUnseenTiles, dora)
@@ -1295,6 +1326,7 @@ function showDangers(thisPidx, tenpaiPidx, thisUnseenTiles, genbutsu, discardsTo
         }
         let suit = Math.floor(tile/10)
         let tileDiv = createTile(tenhou2str(tile)).innerHTML
+        // noinspection JSUnusedLocalSymbols
         let k = `${String(tenhou2strH(tile))}`
         let probStr = '-'
         if (tile in combos) {
@@ -1303,7 +1335,7 @@ function showDangers(thisPidx, tenpaiPidx, thisUnseenTiles, genbutsu, discardsTo
         }
         addTableRow(tables[suit-1], [tileDiv,probStr])
         if (tile in combos) {
-            tables[suit-1].lastChild.lastChild.addEventListener('click', (event) => {
+            tables[suit-1].lastChild.lastChild.addEventListener('click', (_) => {
                 showDangersDetail(tile, combos, dangersDetailDiv)
             })
         }
@@ -1322,7 +1354,7 @@ function showDangersDetail(keyTile, combos, dangersDetailDiv) {
     let keyCombo = combos[keyTile]
     let numRows = 0
     addTableRow(table, [i18next.t("Wait type"), i18next.t("Tiles"), i18next.t("Left"), "%"])
-    table.lastChild.lastChild.style.borderBottom = `1px solid ${GS.C_colorText}`;
+    table.lastElementChild.lastElementChild.style.borderBottom = `1px solid ${GS.C_colorText}`;
     for (let wait of keyCombo.types) {
         numRows++
         let row = []
@@ -1332,7 +1364,7 @@ function showDangersDetail(keyTile, combos, dangersDetailDiv) {
         row.push(`${(wait.combos/combos['all']*100).toFixed(1)}`)
         addTableRow(table, row)
     }
-    table.lastChild.lastChild.style.borderBottom = `1px solid ${GS.C_colorText}`;
+    table.lastElementChild.lastElementChild.style.borderBottom = `1px solid ${GS.C_colorText}`;
     addTableRow(table, [i18next.t("Total %"), "", "", `${(keyCombo['all']/combos['all']*100).toFixed(1)}`])
     table = document.createElement("table")
     dangersDetailDiv.append(table)
@@ -1341,6 +1373,8 @@ function showDangersDetail(keyTile, combos, dangersDetailDiv) {
         addTableRow(table, ['-'])
     }
 }
+
+// noinspection JSUnusedLocalSymbols
 function testDangers() {
     // Pretend we don't see any tiles.
     GS.ui.genericModalBody.append(createElemWithText('pre', ('wait pattern combos:')))
@@ -1355,7 +1389,7 @@ function testDangers() {
     // let combos = calcCombos(generateWaits(), [15,25,16,26,36], [25,16,26,36,15], numT, 46)
     // mostly flat test
     let combos = calcCombos(generateWaits(), [], [], numT, 46)
-    for (let [key,combo] of Object.entries(combos)) {
+    for (let [key,_] of Object.entries(combos)) {
         if (key=='all') {
             continue
         }
@@ -1478,17 +1512,16 @@ function showDangerTable() {
                         }
                         addTableRow(table, row)
                         if (firstRow) {
-                            table.lastChild.lastChild.style.borderTop = `1px solid ${GS.C_colorText}`;
+                            table.lastElementChild.lastElementChild.style.borderTop = `1px solid ${GS.C_colorText}`;
                             firstRow = false
                         }
-                        table.lastChild.lastChild.addEventListener('click', (event) => {
+                        table.lastChild.lastChild.addEventListener('click', (_) => {
                             GS.ply_counter = d['ply']-1
                             updateState()
                         })
                     }
                 }
             }
-            continue
         }
     }
     GS.ui.genericModalBody.append(createElemWithText('pre', ' '))
@@ -1507,7 +1540,7 @@ function showDangerTable() {
                 let result = ta[0] ? i18next.t('hit') : i18next.t('miss')
                 addTableRow(table, [who, result, (p*100).toFixed(1), (accumP*100).toFixed(1)])
                 if (firstRow) {
-                    table.lastChild.lastChild.style.borderTop = `1px solid ${GS.C_colorText}`;
+                    table.lastElementChild.lastElementChild.style.borderTop = `1px solid ${GS.C_colorText}`;
                     firstRow = false
                 }
             }
@@ -1552,7 +1585,7 @@ function addResult() {
 }
 
 function createTile(tileStr) {
-    if (!tileStr || tileStr == null || tileStr.length>5) {
+    if (!tileStr || tileStr.length>5) {
         console.log('error', tileStr)
         throw new Error()
     }
@@ -1566,11 +1599,12 @@ function createTile(tileStr) {
 }
 
 // Input: 123m456s789p1112z Output: 1m2m3m4s5s6s7p8p9p1z1z1z2z
+// noinspection JSUnusedLocalSymbols
 function convertTileStr(str) {
     let output = []
     let suit = ''
     // go backwards so we know what suit each number is
-    for (i=str.length-1; i>=0; i--) {
+    for (let i=str.length-1; i>=0; i--) {
         if (!isNaN(str[i])) {
             if (suit === '') {
                 throw new Error(`error in convertTileStr: ${str}`)
@@ -1658,7 +1692,9 @@ function connectUI() {
     const toggleDealinRateElem = i18nElem("toggle-dealin-rate")
     const about =  i18nElem("about")
     const aboutBody = [document.getElementById("about-body-0"), document.getElementById("about-body-1")]
+    // noinspection JSUnusedLocalSymbols
     const langLabel = i18nElem("langLabel")
+    // noinspection JSUnusedLocalSymbols
     const optionsLabel = i18nElem("options-label")
     let aboutBodyLists = [i18next.t("about-body-0", {returnObjects:true}), i18next.t("about-body-1", {returnObjects:true})]
     aboutBody[0].replaceChildren(document.createElement("ul"))
@@ -1890,7 +1926,7 @@ function connectUI() {
     //     GS.updateZoom()
     //     updateState()
     // }
-    window.matchMedia("(orientation: portrait)").onchange = (event) => {
+    window.matchMedia("(orientation: portrait)").onchange = (_) => {
         GS.updateZoom()
         updateState()
     }
@@ -1953,6 +1989,7 @@ function convertPai2Tenhou(data) {
     deepMap(data, 'dora_marker', tm2t)
     deepMap(data, 'consumed', convertConsumed)
 }
+// noinspection JSUnusedLocalSymbols
 function getBody(data) {
     const parser = new DOMParser()
     let body = parser.parseFromString(data, 'text/html').querySelector('body').textContent
@@ -1964,7 +2001,7 @@ function parseMortalJsonStr(data) {
     GS.heroPidx = GS.fullData.player_id
     GS.ui.setPovPidx(GS.fullData.player_id)
     GS.ge = []
-    let currGe = null
+    let currGe = []
     for (let [idx, event] of data.mjai_log.entries()) {
         if (event.type == 'end_game' || event.type == 'start_game' || event.type == 'dora') {
             continue
@@ -1975,7 +2012,7 @@ function parseMortalJsonStr(data) {
         }
         if (event.type == 'end_kyoku') {
             GS.ge.push(currGe)
-            currGe = null
+            currGe = []
             continue
         }
         if (data.mjai_log[idx-1].type == 'dora') {
@@ -2021,6 +2058,7 @@ function getCurrGe() {
     return GS.ge[GS.hand_counter][GS.ply_counter]
 }
 
+// noinspection JSUnusedLocalSymbols
 function discardOverflowTest() {
     for (let pidx=0; pidx<4; pidx++) {
         // for (let i=0; i<27; i++) {
@@ -2099,12 +2137,13 @@ function parseUrl() {
 }
 
 const GS = new GlobalState
+// noinspection JSUnusedGlobalSymbols
 export default { main, GS, debugState } // So we can access these from dev console
 function main() {
     const lang = ("lang" in localStorage) ? localStorage.getItem("lang") : "en"
     GS.showDealinRate = ("showDealinRate" in localStorage) ? localStorage.getItem("showDealinRate") : false
     i18next_data.lng = lang
-    i18next.init(i18next_data).then(parseUrl(true))
+    i18next.init(i18next_data).then(() => parseUrl(true))
 }
 main()
 
